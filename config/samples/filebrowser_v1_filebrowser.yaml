@@ -1,0 +1,9 @@
+apiVersion: filebrowser.packetware.net/v1
+kind: FileBrowser
+metadata:
+  labels:
+    app.kubernetes.io/name: file-browser-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: filebrowser-sample
+spec:
+  # TODO(user): Add fields here

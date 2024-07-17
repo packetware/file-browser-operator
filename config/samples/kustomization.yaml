@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- filebrowser_v1_filebrowser.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples

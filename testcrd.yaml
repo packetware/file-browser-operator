@@ -1,0 +1,7 @@
+apiVersion: filebrowser.packetware.net/v1
+kind: FileBrowser
+metadata:
+  name: example-filebrowser
+  namespace: test
+spec:
+  persistentVolumeClaimName: mc-pvc

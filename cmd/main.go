@@ -129,6 +129,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "FileBrowser")
 		os.Exit(1)
 	}
+	if err = (&controller.FileBrowserActivatorReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "FileBrowserActivator")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

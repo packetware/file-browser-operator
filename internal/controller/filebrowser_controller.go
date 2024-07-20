@@ -108,118 +108,13 @@ func (r *FileBrowserReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
-	/*
-		// Ensure Deployment for Filebrowser
-		deployment := &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      filebrowser.Name + "-deployment",
-				Namespace: req.Namespace,
-			},
-			Spec: appsv1.DeploymentSpec{
-				Replicas: int32Ptr(1),
-				Selector: &metav1.LabelSelector{
-					MatchLabels: map[string]string{
-						"app": filebrowser.Name,
-					},
-				},
-				Template: corev1.PodTemplateSpec{
-					ObjectMeta: metav1.ObjectMeta{
-						Labels: map[string]string{
-							"app": filebrowser.Name,
-						},
-					},
-					Spec: corev1.PodSpec{
-						Containers: []corev1.Container{
-							{
-								Name:  "filesapi",
-								Image: "ultrasive/filesapi:v1.0.0", // Example image
-								VolumeMounts: []corev1.VolumeMount{
-									{
-										Name:      "data",
-										MountPath: "/srv/filebrowser",
-									},
-								},
-							},
-						},
-						Volumes: []corev1.Volume{
-							{
-								Name: "data",
-								VolumeSource: corev1.VolumeSource{
-									PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-										ClaimName: filebrowser.Spec.PersistentVolumeClaimName,
-									},
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-		if err := controllerutil.SetControllerReference(filebrowser, deployment, r.Scheme); err != nil {
-			return ctrl.Result{}, err
-		}
-
-		// Check if Deployment exists, create if not
-		foundDeployment := &appsv1.Deployment{}
-		err = r.Get(ctx, types.NamespacedName{Name: deployment.Name, Namespace: deployment.Namespace}, foundDeployment)
-		if err != nil && errors.IsNotFound(err) {
-			log.Info("Creating Deployment", "Namespace", deployment.Namespace, "Name", deployment.Name)
-			err = r.Create(ctx, deployment)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-		} else if err != nil {
-			return ctrl.Result{}, err
-		}
-
-		// Ensure NodePort Service for Filebrowser
-		service := &corev1.Service{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      filebrowser.Name + "-service",
-				Namespace: req.Namespace,
-			},
-			Spec: corev1.ServiceSpec{
-				Selector: deployment.Spec.Selector.MatchLabels,
-				Ports: []corev1.ServicePort{
-					{
-						Name:       "http",
-						Protocol:   corev1.ProtocolTCP,
-						Port:       80,
-						TargetPort: intstr.FromInt(80),
-						NodePort:   30000, // Adjust NodePort as needed
-					},
-				},
-				Type: corev1.ServiceTypeNodePort,
-			},
-		}
-		if err := controllerutil.SetControllerReference(filebrowser, service, r.Scheme); err != nil {
-			return ctrl.Result{}, err
-		}
-
-		// Check if Service exists, create if not
-		foundService := &corev1.Service{}
-		err = r.Get(ctx, types.NamespacedName{Name: service.Name, Namespace: service.Namespace}, foundService)
-		if err != nil && errors.IsNotFound(err) {
-			log.Info("Creating Service", "Namespace", service.Namespace, "Name", service.Name)
-			err = r.Create(ctx, service)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-		} else if err != nil {
-			return ctrl.Result{}, err
-		}*/
-
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *FileBrowserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		//For(&filebrowserv1.FileBrowser{}).
 		For(&corev1.PersistentVolumeClaim{}).
-		//Owns(&corev1.PersistentVolumeClaim{}).
-		//Owns(&appsv1.Deployment{}).
-		//Owns(&corev1.Service{}).
 		Complete(r)
 }
 

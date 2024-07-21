@@ -5,4 +5,4 @@ kind: Kustomization
 images:
 - name: controller
   newName: ultrasive/filebrowser-operator
-  newTag: v0.1.1
+  newTag: v0.1.8

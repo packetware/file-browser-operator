@@ -17,16 +17,21 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/tools/clientcmd"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -42,8 +47,9 @@ import (
 )
 
 var (
-	scheme   = runtime.NewScheme()
-	setupLog = ctrl.Log.WithName("setup")
+	scheme     = runtime.NewScheme()
+	setupLog   = ctrl.Log.WithName("setup")
+	kubeClient *kubernetes.Clientset // Global variable for Kubernetes client
 )
 
 func init() {
@@ -96,6 +102,22 @@ func main() {
 		TLSOpts: tlsOpts,
 	})
 
+	// Initialize Kubernetes client
+	kubeconfigLoader := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&clientcmd.ClientConfigLoadingRules{},
+		&clientcmd.ConfigOverrides{},
+	)
+	config, err := kubeconfigLoader.ClientConfig()
+	if err != nil {
+		setupLog.Error(err, "unable to load kubeconfig")
+		os.Exit(1)
+	}
+	kubeClient, err = kubernetes.NewForConfig(config)
+	if err != nil {
+		setupLog.Error(err, "unable to create Kubernetes client")
+		os.Exit(1)
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
@@ -143,7 +165,67 @@ func main() {
 	}
 
 	// HTTP server to route requests based on URL parameters
-	http.HandleFunc("/files", filesHandler)
+	http.HandleFunc("/files/", func(w http.ResponseWriter, r *http.Request) {
+		// Log request details
+		setupLog.Info("Received request",
+			"Method", r.Method,
+			"URL", r.URL.String(),
+			"Headers", r.Header,
+		)
+
+		params := r.URL.Query()
+		namespace := params.Get("namespace")
+		svcName := params.Get("service")
+
+		if namespace == "" || svcName == "" {
+			http.Error(w, "namespace and service parameters are required", http.StatusBadRequest)
+			return
+		}
+
+		// Get the service IP
+		service, err := kubeClient.CoreV1().Services(namespace).Get(context.TODO(), svcName, metav1.GetOptions{})
+		if err != nil {
+			http.Error(w, "unable to get service", http.StatusInternalServerError)
+			return
+		}
+
+		clusterIP := service.Spec.ClusterIP
+		if clusterIP == "" {
+			http.Error(w, "service does not have a clusterIP", http.StatusInternalServerError)
+			return
+		}
+
+		setupLog.Info("Forwarding request",
+			"ClusterIP", clusterIP,
+			"URL Path", r.URL.Path,
+			"Raw Query", r.URL.RawQuery,
+		)
+
+		// Forward the request to the service
+		url := fmt.Sprintf("http://%s:8080%s?%s", clusterIP, r.URL.Path, r.URL.RawQuery)
+		resp, err := http.Get(url)
+		if err != nil {
+			errorMsg := fmt.Sprintf("failed to forward request to %s", clusterIP)
+			http.Error(w, errorMsg, http.StatusInternalServerError)
+			return
+		}
+		defer resp.Body.Close()
+
+		setupLog.Info("Recieving Response",
+			"ClusterIP", clusterIP,
+			"Status", resp.StatusCode,
+		)
+
+		// Copy the response back to the client
+		for key, value := range resp.Header {
+			w.Header()[key] = value
+		}
+		w.WriteHeader(resp.StatusCode)
+		_, err = io.Copy(w, resp.Body)
+		if err != nil {
+			http.Error(w, "failed to copy response", http.StatusInternalServerError)
+		}
+	})
 
 	go func() {
 		if err := http.ListenAndServe(":8082", nil); err != nil {
@@ -156,20 +238,4 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-}
-
-// handler function to respond to files requests
-func filesHandler(w http.ResponseWriter, r *http.Request) {
-	params := r.URL.Query()
-	clusterIP := params.Get("clusterIP")
-
-	if clusterIP == "" {
-		http.Error(w, "clusterIP is required", http.StatusBadRequest)
-		return
-	}
-
-	// Forward the request to the specified clusterIP
-	//url := fmt.Sprintf("http://%s%s", clusterIP, r.URL.Path)
-	//http.Redirect(w, r, url, http.StatusTemporaryRedirect)
-	fmt.Fprintf(w, "Hello, World!")
 }

@@ -19,6 +19,8 @@ package main
 import (
 	"crypto/tls"
 	"flag"
+	"fmt"
+	"net/http"
 	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -129,13 +131,6 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "FileBrowser")
 		os.Exit(1)
 	}
-	if err = (&controller.FileBrowserActivatorReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "FileBrowserActivator")
-		os.Exit(1)
-	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -147,9 +142,34 @@ func main() {
 		os.Exit(1)
 	}
 
+	// HTTP server to route requests based on URL parameters
+	http.HandleFunc("/files", filesHandler)
+
+	go func() {
+		if err := http.ListenAndServe(":8082", nil); err != nil {
+			setupLog.Error(err, "HTTP server failed")
+		}
+	}()
+
 	setupLog.Info("starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+// handler function to respond to files requests
+func filesHandler(w http.ResponseWriter, r *http.Request) {
+	params := r.URL.Query()
+	clusterIP := params.Get("clusterIP")
+
+	if clusterIP == "" {
+		http.Error(w, "clusterIP is required", http.StatusBadRequest)
+		return
+	}
+
+	// Forward the request to the specified clusterIP
+	//url := fmt.Sprintf("http://%s%s", clusterIP, r.URL.Path)
+	//http.Redirect(w, r, url, http.StatusTemporaryRedirect)
+	fmt.Fprintf(w, "Hello, World!")
 }
